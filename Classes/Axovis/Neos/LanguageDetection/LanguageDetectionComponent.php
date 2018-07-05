@@ -125,6 +125,7 @@ class LanguageDetectionComponent implements ComponentInterface {
         if(isset($this->httpSettings['baseUri'])) {
             $baseInfo = $this->parseUriInfo($this->httpSettings['baseUri']);
 
+            $uri->setScheme($baseInfo['protocol']);
             $uri->setHost($baseInfo['host']);
         }
         if(isset($this->httpSettings['port'])) {
