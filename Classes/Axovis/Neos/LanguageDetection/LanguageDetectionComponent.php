@@ -8,6 +8,7 @@ use Neos\Flow\Http\Component\ComponentInterface;
 use Neos\Flow\I18n\Detector;
 use Neos\Flow\I18n\Locale;
 use Neos\Neos\Domain\Service\ContentDimensionPresetSourceInterface;
+use function GuzzleHttp\Psr7\str;
 /**
  * A HTTP component that detects the user agent language and redirects to a corresponding section
  */
@@ -63,6 +64,7 @@ class LanguageDetectionComponent implements ComponentInterface {
         $requestPath = $httpRequest->getUri()->getPath();
         $firstRequestPathSegment = explode('/', ltrim($requestPath, '/'))[0];
 
+        
         //Check if url contains user, if so, don't detect language
         if(strpos($requestPath,'@user-')){
             return;
@@ -84,12 +86,12 @@ class LanguageDetectionComponent implements ComponentInterface {
             //the configuration told us to ignore this segment => no need for us to proceed
             return;
         }
-
         $defaultPreset = $this->contentDimensionPresetSource->getDefaultPreset('language');
-        $referer = $httpRequest->getHeaders()->get('Referer');
+        $referer = implode($httpRequest->getHeader('Referer'));
         $refererInfo = $this->parseUriInfo($referer);
         $currentInfo = $this->parseUriInfo((string)$httpRequest->getUri());
         $varnishInfo = isset($this->varnishSettings['varnishUrl']) ? $this->parseUriInfo($this->varnishSettings['varnishUrl']) : null;
+
 
         if($refererInfo['host'] == $currentInfo['host'] || ($varnishInfo !== null && $refererInfo['host'] == $varnishInfo['host'])) {
             $firstRefererRequestPathSegment = explode('/', ltrim($refererInfo['requestPath'], '/'))[0];
@@ -101,7 +103,7 @@ class LanguageDetectionComponent implements ComponentInterface {
                 $preset = $refererPreset;
             }
         } else {
-            $detectedLocale = $this->localeDetector->detectLocaleFromHttpHeader($httpRequest->getHeader('Accept-Language'));
+            $detectedLocale = $this->localeDetector->detectLocaleFromHttpHeader(implode($httpRequest->getHeader('Accept-Language')));
             if ($detectedLocale instanceof Locale) {
                 $preset = $this->findPreset($detectedLocale->getLanguage());
 
@@ -120,29 +122,33 @@ class LanguageDetectionComponent implements ComponentInterface {
             throw new Exception("Couldn't resolve the language and default language is not set. Check your language config.");
             return;
         }
-
+        // new \GuzzleHttp\Psr7\Uri();
+         /** @var \GuzzleHttp\Psr7\Uri $uri */
         $uri = $httpRequest->getUri();
+        // echo "<pre>";
+        // var_dump($uri);
+        // echo "</pre>";
+        // exit();
         if(isset($this->httpSettings['baseUri'])) {
             $baseInfo = $this->parseUriInfo($this->httpSettings['baseUri']);
 
-            $uri->setHost($baseInfo['host']);
+            $uri->withHost($baseInfo['host']);
         }
         if(isset($this->httpSettings['port'])) {
-            $uri->setPort($this->httpSettings['port']);
+            $uri = $uri->withPort($this->httpSettings['port']);
         }
         if(isset($this->httpSettings['username'])) {
-            $uri->setUsername($this->httpSettings['username']);
+            $uri = $uri->withUserInfo($this->httpSettings['username'], $this->httpSettings['password']);
         }
-        if(isset($this->httpSettings['password'])) {
-            $uri->setUsername($this->httpSettings['password']);
-        }
-        $uri->setPath('/' . $preset['uriSegment'] . $requestPath);
 
+        $uri = $uri->withPath('/' . $preset['uriSegment'] . $requestPath);
         $response = $componentContext->getHttpResponse();
-        $response->setContent(sprintf('<html><head><meta http-equiv="refresh" content="0;url=%s"/></head></html>', htmlentities((string)$uri, ENT_QUOTES, 'utf-8')));
-        $response->setHeader('Location', (string)$uri);
+        $responseBodyString = sprintf('<html><head><meta http-equiv="refresh" content="0;url=%s"/></head></html>', htmlentities((string)$uri, ENT_QUOTES, 'utf-8'));
+        $response = $response->withHeader('Location', (string)$uri);
+        $response = $response->withBody(\GuzzleHttp\Psr7\stream_for($responseBodyString))->withHeader('Location', (string)$uri);
 
         $componentContext->setParameter(ComponentChain::class, 'cancel', TRUE);
+        $componentContext->replaceHttpResponse($response);
     }
 
     private function parseUriInfo($url) {
