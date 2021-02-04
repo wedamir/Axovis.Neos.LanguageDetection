@@ -1,4 +1,4 @@
-Neos Plugin for automatic language detection
+Neos Plugin for automatic language detection for Neos 4.3 and above
 ---------------------------------------------
 
 This extensions provides automatic language detection support for Neos.
@@ -10,4 +10,4 @@ Configuration
 
 If you already have a multilanguage site, you have nothing more to do.
 Otherwise follow this tutorial to translate your content:
-http://neos.readthedocs.org/en/1.2/IntegratorsCookbook/TranslatingContent.html
+https://docs.neos.io/cms/manual/content-repository/content-dimensions
